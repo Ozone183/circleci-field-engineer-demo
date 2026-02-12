@@ -136,22 +136,23 @@ jobs:
             - run:
                 name: Login to Docker Hub
                 command: |
-                  echo "$DOCKERHUB_PASSWORD" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
+                  echo "$MY_PASSWORD" | docker login -u "$MY_USERNAME" --password-stdin
             
             - run:
                 name: Push to Docker Hub
                 command: |
-                  docker tag circleci-demo-api:${CIRCLE_SHA1} ${DOCKERHUB_USERNAME}/circleci-demo-api:${CIRCLE_SHA1}
-                  docker tag circleci-demo-api:${CIRCLE_SHA1} ${DOCKERHUB_USERNAME}/circleci-demo-api:latest
-                  docker push ${DOCKERHUB_USERNAME}/circleci-demo-api:${CIRCLE_SHA1}
-                  docker push ${DOCKERHUB_USERNAME}/circleci-demo-api:latest
+                  docker tag circleci-demo-api:${CIRCLE_SHA1} ${MY_USERNAME}/circleci-demo-api:${CIRCLE_SHA1}
+                  docker tag circleci-demo-api:${CIRCLE_SHA1} ${MY_USERNAME}/circleci-demo-api:latest
+                  docker push ${MY_USERNAME}/circleci-demo-api:${CIRCLE_SHA1}
+                  docker push ${MY_USERNAME}/circleci-demo-api:latest
             
             - run:
                 name: Deployment summary
                 command: |
                   echo "✅ Image published to Docker Hub:"
-                  echo "   ${DOCKERHUB_USERNAME}/circleci-demo-api:${CIRCLE_SHA1}"
-                  echo "   ${DOCKERHUB_USERNAME}/circleci-demo-api:latest"
+                  echo "   ${MY_USERNAME}/circleci-demo-api:${CIRCLE_SHA1}"
+                  echo "   ${MY_USERNAME}/circleci-demo-api:latest"
+
 
 # Define workflows
 workflows:
