@@ -9,11 +9,10 @@ executors:
 
 # Define reusable commands
 commands:
-  setup_remote_docker:
+  setup_docker:
     description: "Setup remote Docker environment"
     steps:
       - setup_remote_docker:
-          version: 20.10.18
           docker_layer_caching: true
 
 # Define jobs
@@ -85,7 +84,7 @@ jobs:
       - attach_workspace:
           at: .
       
-      - setup_remote_docker
+      - setup_docker
       
       - run:
           name: Build Docker image
@@ -122,7 +121,7 @@ jobs:
       - attach_workspace:
           at: /tmp/docker-images
       
-      - setup_remote_docker
+      - setup_docker
       
       - run:
           name: Load Docker image
