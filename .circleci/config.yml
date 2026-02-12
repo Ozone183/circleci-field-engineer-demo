@@ -1,19 +1,15 @@
 version: 2.1
 
+# Use AWS ECR orb for OIDC authentication
+orbs:
+  aws-ecr: circleci/aws-ecr@9.0.4
+
 # Define reusable executors
 executors:
   docker-builder:
     docker:
       - image: cimg/python:3.11
     resource_class: medium
-
-# Define reusable commands
-commands:
-  setup_docker:
-    description: "Setup remote Docker environment"
-    steps:
-      - setup_remote_docker:
-          docker_layer_caching: true
 
 # Define jobs
 jobs:
@@ -76,22 +72,33 @@ jobs:
           paths:
             - .
 
-  # Job 2: Build Docker image
-  build_docker_image:
+  # Job 2: Build and push Docker image to ECR with OIDC
+  build_and_push_image:
     executor: docker-builder
     
     steps:
       - attach_workspace:
           at: .
       
-      - setup_docker
+      - setup_remote_docker:
+          docker_layer_caching: true
       
+      # Authenticate to AWS ECR using OIDC
+      - aws-ecr/ecr_login:
+          role_arn: arn:aws:iam::421765950566:role/CircleCI-OIDC-ECR-Role
+          region: us-east-2
+      
+      # Build Docker image
       - run:
           name: Build Docker image
           command: |
             docker build -t circleci-demo-api:${CIRCLE_SHA1} .
-            docker tag circleci-demo-api:${CIRCLE_SHA1} circleci-demo-api:latest
+            docker tag circleci-demo-api:${CIRCLE_SHA1} \
+              421765950566.dkr.ecr.us-east-2.amazonaws.com/circleci-demo-api:${CIRCLE_SHA1}
+            docker tag circleci-demo-api:${CIRCLE_SHA1} \
+              421765950566.dkr.ecr.us-east-2.amazonaws.com/circleci-demo-api:latest
       
+      # Test Docker image
       - run:
           name: Test Docker image
           command: |
@@ -102,57 +109,23 @@ jobs:
             docker logs test-container
             docker stop test-container
       
-      - run:
-          name: Save Docker image to tar
-          command: |
-            mkdir -p /tmp/docker-images
-            docker save circleci-demo-api:${CIRCLE_SHA1} -o /tmp/docker-images/api-image.tar
-      
-      - persist_to_workspace:
-          root: /tmp/docker-images
-          paths:
-            - api-image.tar
-
-  # Job 3: Publish Docker image (only on main branch)
-  publish_image:
-    executor: docker-builder
-    
-    steps:
-      - attach_workspace:
-          at: /tmp/docker-images
-      
-      - setup_docker
-      
-      - run:
-          name: Load Docker image
-          command: |
-            docker load -i /tmp/docker-images/api-image.tar
-      
-      # Conditional: Only publish on main branch
+      # Push to ECR (conditional - only on main branch)
       - when:
           condition:
             equal: [ main, << pipeline.git.branch >> ]
           steps:
             - run:
-                name: Login to Docker Hub
+                name: Push to Amazon ECR
                 command: |
-                  echo "$MY_PASSWORD" | docker login -u "$MY_USERNAME" --password-stdin
-            
-            - run:
-                name: Push to Docker Hub
-                command: |
-                  docker tag circleci-demo-api:${CIRCLE_SHA1} ${MY_USERNAME}/circleci-demo-api:${CIRCLE_SHA1}
-                  docker tag circleci-demo-api:${CIRCLE_SHA1} ${MY_USERNAME}/circleci-demo-api:latest
-                  docker push ${MY_USERNAME}/circleci-demo-api:${CIRCLE_SHA1}
-                  docker push ${MY_USERNAME}/circleci-demo-api:latest
+                  docker push 421765950566.dkr.ecr.us-east-2.amazonaws.com/circleci-demo-api:${CIRCLE_SHA1}
+                  docker push 421765950566.dkr.ecr.us-east-2.amazonaws.com/circleci-demo-api:latest
             
             - run:
                 name: Deployment summary
                 command: |
-                  echo "✅ Image published to Docker Hub:"
-                  echo "   ${MY_USERNAME}/circleci-demo-api:${CIRCLE_SHA1}"
-                  echo "   ${MY_USERNAME}/circleci-demo-api:latest"
-
+                  echo "✅ Image pushed to Amazon ECR:"
+                  echo "   421765950566.dkr.ecr.us-east-2.amazonaws.com/circleci-demo-api:${CIRCLE_SHA1}"
+                  echo "   421765950566.dkr.ecr.us-east-2.amazonaws.com/circleci-demo-api:latest"
 
 # Define workflows
 workflows:
@@ -160,13 +133,13 @@ workflows:
   build_test_deploy:
     jobs:
       - build_and_test
-      - build_docker_image:
+      - build_and_push_image:
           requires:
             - build_and_test
-      - publish_image:
-          requires:
-            - build_docker_image
           # Only run on main branch
           filters:
             branches:
               only: main
+          # Enable OIDC context
+          context: 
+            - circleci-oidc
